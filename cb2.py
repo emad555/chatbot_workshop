@@ -1,40 +1,30 @@
-import gradio as gr
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from flask import Flask, render_template, request
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Load the pre-trained models and tokenizers
-gpt2_model_name = "gpt2"  # Replace with the desired GPT-2 model name
-gpt2_model = GPT2LMHeadModel.from_pretrained(gpt2_model_name)
-gpt2_tokenizer = GPT2Tokenizer.from_pretrained(gpt2_model_name)
 
-dialogpt_large_model_name = "microsoft/DialoGPT-large"
-dialogpt_large_model = GPT2LMHeadModel.from_pretrained(dialogpt_large_model_name)
-dialogpt_large_tokenizer = GPT2Tokenizer.from_pretrained(dialogpt_large_model_name)
+app = Flask(__name__)
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 
-dialogpt_medium_model_name = "microsoft/DialoGPT-medium"
-dialogpt_medium_model = GPT2LMHeadModel.from_pretrained(dialogpt_medium_model_name)
-dialogpt_medium_tokenizer = GPT2Tokenizer.from_pretrained(dialogpt_medium_model_name)
+# Load the pre-trained model and tokenizer
+model_name = "microsoft/DialoGPT-medium"
+model = AutoModelForCausalLM.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-# Define the chatbot function using GPT-2 and DialoGPT models
+# Define the chatbot function using DialoGPT
 def chatbot(message):
-    # Use GPT-2 for generating a response
-    gpt2_input_ids = gpt2_tokenizer.encode(message, return_tensors="pt")
-    gpt2_response = gpt2_model.generate(gpt2_input_ids, max_length=50, num_return_sequences=1)
-    gpt2_response_text = gpt2_tokenizer.decode(gpt2_response[:, gpt2_input_ids.shape[-1]:][0], skip_special_tokens=True)
+    input_ids = tokenizer.encode(message + tokenizer.eos_token, return_tensors="pt")
+    response = model.generate(input_ids, max_length=100, num_return_sequences=1, pad_token_id=tokenizer.eos_token_id)
+    response_text = tokenizer.decode(response[:, input_ids.shape[-1]:][0], skip_special_tokens=True)
+    return response_text
 
-    # Use DialoGPT-large for generating a response
-    dialogpt_large_input_ids = dialogpt_large_tokenizer.encode(message, return_tensors="pt")
-    dialogpt_large_response = dialogpt_large_model.generate(dialogpt_large_input_ids, max_length=100, num_return_sequences=1)
-    dialogpt_large_response_text = dialogpt_large_tokenizer.decode(dialogpt_large_response[:, dialogpt_large_input_ids.shape[-1]:][0], skip_special_tokens=True)
+# Home route with form to input messages
+@app.route('/', methods=['GET', 'POST'])
+def home():
+    if request.method == 'POST':
+        user_input = request.form['message']
+        response_text = chatbot(user_input)
+        return render_template('index.html', user_input=user_input, response_text=response_text)
+    return render_template('index.html')
 
-    # Use DialoGPT-medium for generating a response
-    dialogpt_medium_input_ids = dialogpt_medium_tokenizer.encode(message, return_tensors="pt")
-    dialogpt_medium_response = dialogpt_medium_model.generate(dialogpt_medium_input_ids, max_length=100, num_return_sequences=1)
-    dialogpt_medium_response_text = dialogpt_medium_tokenizer.decode(dialogpt_medium_response[:, dialogpt_medium_input_ids.shape[-1]:][0], skip_special_tokens=True)
-
-    return gpt2_response_text, dialogpt_large_response_text, dialogpt_medium_response_text
-
-# Create the Gradio interface
-iface = gr.Interface(fn=chatbot, inputs="text", outputs=["text", "text", "text"])
-
-# Start the interface
-iface.launch()
+if __name__ == '__main__':
+    app.run(debug=True)
