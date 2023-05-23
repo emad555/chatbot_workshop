@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-
+# create flask app
 app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 
